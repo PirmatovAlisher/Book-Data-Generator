@@ -2,23 +2,27 @@
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 WORKDIR /src
 
-# Copy solution and project files
-COPY BookDataGenerator/*.csproj ./BookDataGenerator/
-RUN dotnet restore "BookDataGenerator/BookDataGenerator.csproj"
+# Copy project files and restore dependencies
+COPY BookDataGenerator.UI/BookDataGenerator.csproj ./BookDataGenerator.UI/
+RUN dotnet restore "BookDataGenerator.UI/BookDataGenerator.csproj"
 
-# Copy everything else
+# Copy everything else and build
 COPY . .
-
-# Publish the app
-WORKDIR "/src/BookDataGenerator"
-RUN dotnet publish "BookDataGenerator.csproj" -c Release -o /app/publish
+RUN dotnet publish "BookDataGenerator.UI/BookDataGenerator.csproj" \
+    -c Release \
+    -o /app/publish \
+    --no-restore
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:7.0 AS final
 WORKDIR /app
-EXPOSE 80
+
+# Install ASP.NET Core runtime for Blazor Server
+RUN apt-get update && \
+    apt-get install -y aspnetcore-runtime-7.0 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy published app
 COPY --from=build /app/publish .
-ENV ASPNETCORE_URLS=http://*:$PORT
+EXPOSE 80
 ENTRYPOINT ["dotnet", "BookDataGenerator.UI.dll"]
