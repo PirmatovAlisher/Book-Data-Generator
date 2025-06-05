@@ -1,0 +1,372 @@
+﻿@page "/"
+@using BookDataGenerator.UI.Models
+@using BookDataGenerator.UI.Services
+@using System.Text
+@using CsvHelper
+@using System.Globalization
+@inject BookService BookService
+@inject IJSRuntime JS
+@implements IDisposable
+
+
+
+<div class="controls-container">
+	<div class="controls">
+		<!-- Region selector -->
+		<div class="control-group">
+			<label>Region:</label>
+			<select class="form-select" @bind="Region" @bind:after="RegenerateBooks">
+				<option value="en">English (USA)</option>
+				<option value="de">German (Germany)</option>
+				<option value="ja">Japanese (Japan)</option>
+			</select>
+		</div>
+
+		<!-- Seed input with random button -->
+		<div class="control-group">
+			<label>Seed:</label>
+			<div class="seed-input">
+				<input type="number" class="form-control" @bind="Seed" @oninput="SeedChanged" />
+				<button class="btn btn-outline-secondary" @onclick="RandomSeed" title="Random Seed">
+					🔀
+				</button>
+			</div>
+		</div>
+
+		<!-- Likes slider -->
+		<div class="control-group">
+			<label>Avg Likes: @AvgLikes.ToString("0.0")</label>
+			<input type="range" min="0" max="10" step="0.1" class="form-range"
+				   @bind="AvgLikes" @bind:after="RegenerateBooks" />
+		</div>
+
+		<!-- Reviews input -->
+		<div class="control-group">
+			<label>Avg Reviews:</label>
+			<input type="number" min="0" max="100" step="0.1" class="form-control"
+				   @bind="AvgReviews" @bind:after="RegenerateBooks" />
+		</div>
+
+		<!-- Action buttons -->
+		<div class="control-group button-group">
+			<button class="btn btn-primary" @onclick="ExportCsv">
+				<i class="bi bi-file-earmark-spreadsheet"></i> Export CSV
+			</button>
+			<button class="btn @(IsGalleryView ? "btn-secondary" : "btn-outline-secondary")"
+					@onclick="ToggleView">
+				<i class="bi @(IsGalleryView ? "bi-list" : "bi-grid")"></i>
+				@(IsGalleryView ? "Table View" : "Gallery View")
+			</button>
+		</div>
+	</div>
+</div>
+
+@if (IsGalleryView)
+{
+	<div class="gallery-container">
+		<div class="gallery">
+			@foreach (var book in DisplayedBooks)
+			{
+				<div class="book-card" id="book-@book.Index" @onclick="() => ToggleExpand(book)">
+					<div class="book-cover">
+						<img src="@book.CoverImageUrl" alt="Book cover" />
+						<div class="cover-overlay">
+							<div class="cover-author">@book.Author</div>
+							<div class="cover-title">@book.Title</div>
+						</div>
+					</div>
+					<div class="book-info">
+						<h3>@book.Title</h3>
+						<p class="author">@book.Author</p>
+						<div class="book-meta">
+							<span>❤️ @book.Likes</span>
+							<span>📝 @book.Reviews.Count</span>
+						</div>
+					</div>
+				</div>
+
+				@if (book == ExpandedBook)
+				{
+					<div class="gallery-details">
+						<div class="book-details">
+							<div class="cover-column">
+								<div class="book-cover">
+									<img src="@book.CoverImageUrl" alt="Book cover" />
+									<div class="cover-overlay">
+										<div class="cover-author">@book.Author</div>
+										<div class="cover-title">@book.Title</div>
+									</div>
+								</div>
+								<div class="likes-count">
+									<i class="bi bi-heart-fill"></i> @book.Likes Likes
+								</div>
+							</div>
+							<div class="details-column">
+								<h2>@book.Title</h2>
+								<p class="author">by @book.Author</p>
+								<p class="publisher">@book.Publisher</p>
+								<p class="publish-date">
+									<i class="bi bi-calendar"></i>
+									Published @book.PublishedDate.ToString("MMMM yyyy")
+								</p>
+								<p class="isbn">ISBN: @book.ISBN</p>
+
+								<div class="reviews-section">
+									<h3><i class="bi bi-chat-text"></i> Reviews (@book.Reviews.Count)</h3>
+									@if (book.Reviews.Count == 0)
+									{
+										<p>No reviews yet</p>
+									}
+									else
+									{
+										@foreach (var review in book.Reviews)
+										{
+											<div class="review">
+												<div class="review-header">
+													<span class="reviewer">@review.ReviewerName</span>
+													<span class="rating">
+														@for (int i = 0; i < 5; i++)
+														{
+															<i class="bi @(i < review.Rating ? "bi-star-fill" : "bi-star")"></i>
+														}
+													</span>
+												</div>
+												<p class="review-content">@review.Content</p>
+											</div>
+										}
+									}
+								</div>
+							</div>
+						</div>
+					</div>
+				}
+			}
+		</div>
+	</div>
+}
+else
+{
+	<div class="table-container">
+		<table class="book-table">
+			<thead>
+				<tr>
+					<th>#</th>
+					<th>ISBN</th>
+					<th>Title</th>
+					<th>Author</th>
+					<th>Publisher</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (var book in DisplayedBooks)
+				{
+					<tr @onclick="() => ToggleExpand(book)">
+						<td>@book.Index</td>
+						<td>@book.ISBN</td>
+						<td>@book.Title</td>
+						<td>@book.Author</td>
+						<td>@book.Publisher</td>
+					</tr>
+					@if (book == ExpandedBook)
+					{
+						<tr class="expanded-row">
+							<td colspan="5">
+								<div class="book-details">
+									<div class="cover-column">
+										<div class="book-cover">
+											<img src="@book.CoverImageUrl" alt="Book cover" />
+											<div class="cover-overlay">
+												<div class="cover-author">@book.Author</div>
+												<div class="cover-title">@book.Title</div>
+											</div>
+										</div>
+										<div class="likes-count">
+											<i class="bi bi-heart-fill"></i> @book.Likes Likes
+										</div>
+									</div>
+									<div class="details-column">
+										<h2>@book.Title</h2>
+										<p class="author">by @book.Author</p>
+										<p class="publisher">@book.Publisher</p>
+										<p class="publish-date">
+											<i class="bi bi-calendar"></i>
+											Published @book.PublishedDate.ToString("MMMM yyyy")
+										</p>
+										<p class="isbn">ISBN: @book.ISBN</p>
+
+										<div class="reviews-section">
+											<h3><i class="bi bi-chat-text"></i> Reviews (@book.Reviews.Count)</h3>
+											@foreach (var review in book.Reviews)
+											{
+												<div class="review">
+													<div class="review-header">
+														<span class="reviewer">@review.ReviewerName</span>
+														<span class="rating">
+															@for (int i = 0; i < 5; i++)
+															{
+																<i class="bi @(i < review.Rating ? "bi-star-fill" : "bi-star")"></i>
+															}
+														</span>
+													</div>
+													<p class="review-content">@review.Content</p>
+												</div>
+											}
+										</div>
+									</div>
+								</div>
+							</td>
+						</tr>
+					}
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+<div id="scroll-sentinel"></div>
+
+@code {
+	private string Region = "en";
+	private long Seed = 0;
+	private double AvgLikes = 0;
+	private double AvgReviews = 0;
+	private bool IsGalleryView = false;
+
+
+	private List<Book> DisplayedBooks = new();
+	private Book? ExpandedBook = null;
+	private const int InitialCount = 20;
+	private const int MoreCount = 10;
+	private bool HasMore = true;
+
+
+	private IJSObjectReference? module;
+	private DotNetObjectReference<Index>? objRef;
+
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+		{
+			objRef = DotNetObjectReference.Create(this);
+			module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/site.js");
+			await module.InvokeVoidAsync("initInfiniteScroll", objRef);
+		}
+	}
+
+	protected override void OnInitialized()
+	{
+		// Initial book generation
+		RegenerateBooks();
+	}
+
+	private void RegenerateBooks()
+	{
+		// Reset to first page
+		DisplayedBooks = BookService.GenerateBooks(
+			InitialCount, 0, Region, AvgLikes, AvgReviews, Seed);
+		HasMore = true;
+		ExpandedBook = null;
+	}
+	
+	[JSInvokable]
+	public async Task LoadMoreBooks()
+	{
+		if (HasMore)
+		{
+			// Generate next batch using current offset
+			var newBooks = BookService.GenerateBooks(
+				MoreCount, DisplayedBooks.Count, Region,
+				AvgLikes, AvgReviews, Seed);
+
+			DisplayedBooks.AddRange(newBooks);
+			HasMore = newBooks.Count > 0;
+			StateHasChanged();
+		}
+	}
+
+	private void ToggleExpand(Book book)
+	{
+		if (ExpandedBook == book)
+		{
+			ExpandedBook = null;
+		}
+		else
+		{
+			ExpandedBook = book;
+
+			// Scroll to expanded item in gallery view
+			if (IsGalleryView)
+			{
+				Task.Run(async () =>
+				{
+					await Task.Delay(50);
+					if (module is not null)
+					{
+						await module.InvokeVoidAsync("scrollToElement", $"book-{book.Index}");
+					}
+				});
+			}
+		}
+	}
+
+	private void RandomSeed()
+	{
+		Seed = new Random().Next(1, 1000000);
+		RegenerateBooks();
+	}
+
+	private void SeedChanged(ChangeEventArgs e)
+	{
+		if (long.TryParse(e.Value?.ToString(), out long newSeed))
+		{
+			Seed = newSeed;
+			RegenerateBooks();
+		}
+	}
+
+	private void ToggleView()
+	{
+		IsGalleryView = !IsGalleryView;
+		ExpandedBook = null;
+	}
+
+	private async void ExportCsv()
+	{
+		using var writer = new StringWriter();
+		using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture);
+		csv.WriteRecords(DisplayedBooks.Select(b => new
+		{
+			b.Index,
+			b.ISBN,
+			b.Title,
+			b.Author,
+			b.Publisher,
+			b.Likes,
+			ReviewCount = b.Reviews.Count,
+			PublishedDate = b.PublishedDate.ToString("yyyy-MM-dd")
+		}));
+
+		var bytes = Encoding.UTF8.GetBytes(writer.ToString());
+
+		if (module is not null)
+		{
+			await module.InvokeVoidAsync("downloadFile", new
+			{
+				ByteArray = bytes,
+				FileName = $"books_{DateTime.Now:yyyyMMdd}.csv",
+				ContentType = "text/csv"
+			});
+		}
+	}
+
+	public async void Dispose()
+	{
+		if (module is not null)
+		{
+			await module.InvokeVoidAsync("disconnectInfiniteScroll");
+			await module.DisposeAsync();
+		}
+		objRef?.Dispose();
+	}
+}
