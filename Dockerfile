@@ -2,13 +2,16 @@
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 WORKDIR /src
 
-# Copy project files and restore dependencies
-COPY BookDataGenerator.UI/BookDataGenerator.csproj ./BookDataGenerator.UI/
-RUN dotnet restore "BookDataGenerator.UI/BookDataGenerator.csproj"
+# Create solution structure
+RUN mkdir -p BookDataGenerator.UI
 
-# Copy everything else and build
+# Copy project file
+COPY BookDataGenerator.UI/BookDataGenerator.UI.csproj ./BookDataGenerator.UI/
+RUN dotnet restore "BookDataGenerator.UI/BookDataGenerator.UI.csproj"
+
+# Copy all source files
 COPY . .
-RUN dotnet publish "BookDataGenerator.UI/BookDataGenerator.csproj" \
+RUN dotnet publish "BookDataGenerator.UI/BookDataGenerator.UI.csproj" \
     -c Release \
     -o /app/publish \
     --no-restore
@@ -16,13 +19,12 @@ RUN dotnet publish "BookDataGenerator.UI/BookDataGenerator.csproj" \
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:7.0 AS final
 WORKDIR /app
+EXPOSE 80
 
-# Install ASP.NET Core runtime for Blazor Server
-RUN apt-get update && \
-    apt-get install -y aspnetcore-runtime-7.0 && \
-    rm -rf /var/lib/apt/lists/*
+# Required for Render
+ENV ASPNETCORE_URLS=http://+:80 \
+    DOTNET_RUNNING_IN_CONTAINER=true
 
 # Copy published app
 COPY --from=build /app/publish .
-EXPOSE 80
 ENTRYPOINT ["dotnet", "BookDataGenerator.UI.dll"]
