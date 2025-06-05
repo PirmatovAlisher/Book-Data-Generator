@@ -1,0 +1,5 @@
+services:
+  - type: web
+    name: bookdata-generator
+    runtime: docker
+    port: 80
