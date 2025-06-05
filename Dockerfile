@@ -21,4 +21,4 @@ EXPOSE 80
 # Copy published app
 COPY --from=build /app/publish .
 ENV ASPNETCORE_URLS=http://*:$PORT
-ENTRYPOINT ["dotnet", "BookDataGenerator.dll"]
+ENTRYPOINT ["dotnet", "BookDataGenerator.UI.dll"]
